@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Query Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Demo</h1>
+        
+        <div class="upload-section">
+            <h2>Upload Code File</h2>
+            <form id="upload-form">
+                <input type="file" id="file-input" accept=".cpp,.py,.java,.js,.txt">
+                <button type="submit">Upload</button>
+            </form>
+            <div id="upload-status"></div>
+        </div>
+
+        <div class="query-section">
+            <h2>Ask a Question</h2>
+            <textarea id="query-input" placeholder="Ask about your code..."></textarea>
+            <button id="submit-query">Submit Query</button>
+            <div id="response-container"></div>
+            <div class="loading-spinner" id="loading-spinner" style="display: none;">
+                <div class="spinner"></div>
+                <p>Processing your query...</p>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

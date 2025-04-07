@@ -1,0 +1,6 @@
+langchain>=0.1.0
+langchain-community  
+langchain-text-splitters 
+chromadb 
+pypdf
+langchain-ollama
