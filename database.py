@@ -3,12 +3,13 @@ import os
 import shutil
 import zipfile
 import tempfile
+import time
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFDirectoryLoader, TextLoader, DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.schema.document import Document
+from langchain_core.documents import Document
 from embedding_function import embedding_function
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 
 CHROMA_PATH = "chroma"
 DATA_PATH = "data"
@@ -22,11 +23,27 @@ def extract_zip(zip_path: str, extract_path: str) -> None:
 def load_documents():
     documents = []
     
+    # Load PDFs
+    pdf_loader = PyPDFDirectoryLoader(DATA_PATH)
+    try:
+        documents.extend(pdf_loader.load())
+        
+        # --- ADD THIS DEBUG CHECK ---
+        if len(documents) > 0:
+            print(f"📄 DEBUG: Loaded PDF with {len(documents[0].page_content)} characters.")
+            print(f"📄 DEBUG PREVIEW: {documents[0].page_content[:100]}...") # Show first 100 chars
+        else:
+            print("⚠️ DEBUG: PDF loaded but no documents found!")
+        # ----------------------------
+
+    except Exception as e:
+        print(f"Error loading PDFs: {e}")
+
     # Create DirectoryLoader for regular files in DATA_PATH
     regular_loader = DirectoryLoader(
         DATA_PATH,
         glob="**/*.*",
-        exclude=["**/*.zip"],
+        exclude=["**/*.zip", "**/*.pdf"],
         loader_cls=lambda file_path: TextLoader(file_path, encoding='utf-8'),
         show_progress=True
     )
@@ -64,10 +81,11 @@ def clean_temp_files():
 
 def split_documents(documents: list[Document]):
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,  # Increased to capture more context
-        chunk_overlap=200,  # Increased overlap
+        chunk_size=1500,       # 1500 is a sweet spot for both code and text
+        chunk_overlap=300,     # Higher overlap prevents cutting code functions in half
         length_function=len,
-        separators=["\n\n", "\n", " ", ""],
+        # Prioritize splitting by paragraphs, then code blocks, then lines
+        separators=["\n\n", "\n", " ", ""], 
         is_separator_regex=False,
     )
     return text_splitter.split_documents(documents)
@@ -90,13 +108,26 @@ def add_to_chroma(chunks: list[Document]):
 
     if len(new_chunks):
         print(f"👉 Adding new documents: {len(new_chunks)}")
-        batch_size = 130  # Reduced batch size to stay under the 166 limit
+        batch_size = 10 
         for i in range(0, len(new_chunks), batch_size):
             batch = new_chunks[i:i + batch_size]
             print(f"Processing batch {i//batch_size + 1} of {(len(new_chunks)-1)//batch_size + 1}")
             batch_ids = [chunk.metadata["id"] for chunk in batch]
-            db.add_documents(batch, ids=batch_ids)
-        db.persist()
+            
+            # Simple retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    db.add_documents(batch, ids=batch_ids)
+                    break
+                except Exception as e:
+                    if "429" in str(e) and attempt < max_retries - 1:
+                        print(f"Rate limit hit, waiting 20 seconds... (Attempt {attempt+1}/{max_retries})")
+                        time.sleep(20)
+                    else:
+                        raise e
+            
+            time.sleep(4) # Wait 4 seconds to stay under 15 RPM limit
         print("✅ All documents added successfully")
     else:
         print("✅ No new documents to add")
@@ -127,11 +158,8 @@ def clear_database():
     if os.path.exists(CHROMA_PATH):
         shutil.rmtree(CHROMA_PATH)
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--reset", action="store_true", help="Reset the database.")
-    args = parser.parse_args()
-    if args.reset:
+def generate_data_store(reset: bool = False):
+    if reset:
         print("✨ Clearing Database")
         clear_database()
 
@@ -141,6 +169,12 @@ def main():
         add_to_chroma(chunks)
     finally:
         clean_temp_files()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reset", action="store_true", help="Reset the database.")
+    args = parser.parse_args()
+    generate_data_store(args.reset)
 
 if __name__ == "__main__":
     main()

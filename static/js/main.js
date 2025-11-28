@@ -1,9 +1,16 @@
+// --- UPLOAD HANDLING (Looks good, but added a check) ---
 document.getElementById('upload-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fileInput = document.getElementById('file-input');
     const status = document.getElementById('upload-status');
     const submitButton = e.target.querySelector('button[type="submit"]');
-    
+
+    if (fileInput.files.length === 0) {
+        status.textContent = 'Please select a file first.';
+        status.className = 'error';
+        return;
+    }
+
     const formData = new FormData();
     formData.append('file', fileInput.files[0]);
 
@@ -17,13 +24,13 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
             body: formData
         });
         const data = await response.json();
-        
+
         if (response.ok) {
             status.className = 'success';
             status.textContent = 'File uploaded successfully!';
         } else {
             status.className = 'error';
-            status.textContent = data.error || 'Upload failed';
+            status.textContent = data.detail || data.error || 'Upload failed';
         }
     } catch (error) {
         status.className = 'error';
@@ -33,12 +40,13 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
     }
 });
 
+// --- QUERY HANDLING (Fixed for Versatility & Markdown) ---
 document.getElementById('submit-query').addEventListener('click', async () => {
     const queryInput = document.getElementById('query-input');
     const responseContainer = document.getElementById('response-container');
     const submitButton = document.getElementById('submit-query');
     const loadingSpinner = document.getElementById('loading-spinner');
-    
+
     if (!queryInput.value.trim()) {
         responseContainer.textContent = 'Please enter a query';
         responseContainer.className = 'error';
@@ -47,7 +55,8 @@ document.getElementById('submit-query').addEventListener('click', async () => {
 
     try {
         submitButton.disabled = true;
-        loadingSpinner.style.display = 'flex';
+        // Show loading, hide previous response
+        if (loadingSpinner) loadingSpinner.style.display = 'flex';
         responseContainer.style.display = 'none';
 
         const response = await fetch('/query', {
@@ -55,28 +64,28 @@ document.getElementById('submit-query').addEventListener('click', async () => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                query: `Analyze the software license in: ${queryInput.value}`
+            body: JSON.stringify({
+                query: queryInput.value
             })
         });
         const data = await response.json();
-        
-        loadingSpinner.style.display = 'none';
+
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
         responseContainer.style.display = 'block';
-        
+
         if (response.ok) {
-            const formattedResponse = data.response.replace(/\\n/g, '\n');
-            responseContainer.innerHTML = `<pre>${formattedResponse}</pre>`;
+            responseContainer.innerHTML = marked.parse(data.response);
             responseContainer.className = 'success fade-in';
         } else {
-            responseContainer.textContent = data.error || 'Query failed';
+            responseContainer.textContent = data.detail || data.error || 'Query failed';
             responseContainer.className = 'error fade-in';
         }
     } catch (error) {
-        loadingSpinner.style.display = 'none';
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
         responseContainer.style.display = 'block';
         responseContainer.textContent = 'Error processing query';
         responseContainer.className = 'error fade-in';
+        console.error(error);
     } finally {
         submitButton.disabled = false;
     }

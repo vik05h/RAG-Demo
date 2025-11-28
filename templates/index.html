@@ -1,19 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Query Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="../static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
+
 <body>
     <div class="container">
         <h1>Demo</h1>
-        
+
         <div class="upload-section">
             <h2>Upload Code File</h2>
             <form id="upload-form">
-                <input type="file" id="file-input" accept=".cpp,.py,.java,.js,.txt">
+                <input type="file" id="file-input" accept=".cpp,.py,.java,.js,.txt,.pdf,.docx,.zip">
                 <button type="submit">Upload</button>
             </form>
             <div id="upload-status"></div>
@@ -30,6 +33,7 @@
             </div>
         </div>
     </div>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="../static/js/main.js"></script>
 </body>
+
 </html>

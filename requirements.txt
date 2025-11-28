@@ -1,6 +1,12 @@
 langchain>=0.1.0
-langchain-community  
-langchain-text-splitters 
-chromadb 
+langchain-community
+langchain-text-splitters
+chromadb
 pypdf
-langchain-ollama
+fastapi
+uvicorn
+python-multipart
+langchain-google-genai
+jinja2
+aiofiles
+python-dotenv

@@ -1,56 +1,77 @@
-from flask import Flask, request, render_template, jsonify
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 import os
-from werkzeug.utils import secure_filename
-from database import main as update_database
+import shutil
+from database import generate_data_store
 from query_data import query_rag
+from pydantic import BaseModel
+from dotenv import load_dotenv
 
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'data'
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
+load_dotenv()
 
-ALLOWED_EXTENSIONS = {'cpp', 'py', 'java', 'js', 'txt', 'php', 'zip'}
+app = FastAPI()
 
-def allowed_file(filename):
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Templates
+templates = Jinja2Templates(directory="templates")
+
+# Configuration
+UPLOAD_FOLDER = 'data'
+ALLOWED_EXTENSIONS = {'cpp', 'py', 'java', 'js', 'ts', 'html', 'css', 'txt', 'md', 'pdf', 'zip'}
+MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32MB
+
+# Ensure upload folder exists
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+class QueryRequest(BaseModel):
+    query: str
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
+@app.get("/")
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    if not file:
+        raise HTTPException(status_code=400, detail="No file part")
     
-    file = request.files['file']
     if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+        raise HTTPException(status_code=400, detail="No selected file")
     
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-        
-        try:
-            update_database()
-            return jsonify({'message': 'File uploaded and processed successfully'})
-        except Exception as e:
-            return jsonify({'error': f'Error processing file: {str(e)}'}), 500
+    if not allowed_file(file.filename):
+        raise HTTPException(status_code=400, detail="Invalid file type")
     
-    return jsonify({'error': 'Invalid file type'}), 400
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        generate_data_store()
+        return {"message": "File uploaded and processed successfully"}
+    except Exception as e:
+        # Clean up if something goes wrong? Maybe.
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
-@app.route('/query', methods=['POST'])
-def query():
-    data = request.json
-    query_text = data.get('query')
+@app.post("/query")
+async def query(request: QueryRequest):
+    query_text = request.query
     if not query_text:
-        return jsonify({'error': 'No query provided'}), 400
+        raise HTTPException(status_code=400, detail="No query provided")
     
     try:
         response = query_rag(query_text)
-        return jsonify({'response': response})
+        return {"response": response}
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == '__main__':
-    app.run(debug=True)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
